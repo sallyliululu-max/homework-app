@@ -330,6 +330,50 @@ body {
 
 /* section label */
 .sec-label { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
+
+/* ── Photo + annotation panel ── */
+.photo-panel {
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
+}
+.photo-wrap { position: relative; width: 100%; }
+.photo-wrap img { width: 100%; border-radius: 12px; display: block; }
+.location-tag {
+  position: absolute;
+  background: rgba(220,38,38,0.92); color: #fff;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px;
+  pointer-events: none; white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+/* ── Feedback button ── */
+.wrong-item { position: relative; }
+.feedback-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 8px; padding: 5px 12px;
+  border: 1.5px solid #d97706; border-radius: 20px;
+  background: #fffbeb; color: #92400e;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  font-family: 'Noto Sans SC', sans-serif;
+  transition: all 0.15s;
+}
+.feedback-btn:active { background: #fef3c7; }
+.wrong-item.dismissed { opacity: 0.4; pointer-events: none; }
+
+/* ── Clear photos banner ── */
+.clear-banner {
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  border-radius: 10px; padding: 10px 14px;
+  font-size: 13px; color: #166534;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.clear-btn-sm {
+  font-size: 12px; font-weight: 700; color: #dc2626;
+  background: #fee2e2; border: none; border-radius: 8px;
+  padding: 4px 10px; cursor: pointer;
+  font-family: 'Noto Sans SC', sans-serif;
+}
 </style>
 </head>
 <body>
@@ -408,6 +452,10 @@ body {
 
 <!-- ── SCREEN 2: ERROR BOOK ── -->
 <div class="screen" id="screen-errors">
+  <div class="clear-banner" id="photo-clear-banner" style="display:none;">
+    <span>📷 本月已保存 <span id="photo-count">0</span> 张作业照片</span>
+    <button class="clear-btn-sm" onclick="clearPhotos()">🗑️ 立即清除</button>
+  </div>
   <div class="stat-row">
     <div class="stat-card">
       <div class="stat-val" style="color:var(--red)" id="err-total">0</div>
@@ -567,7 +615,9 @@ async function gradeWithAI(imageBase64) {
   "advice": ["给家长的具体建议1", "给家长的具体建议2"]
 }
 
-如果图片不清晰或不是作业，请返回：{"error": "图片无法识别，请重新拍照"}`;
+如果图片不清晰或不是作业，请返回：{"error": "图片无法识别，请重新拍照"}
+
+特别注意：wrong_items中每个错题必须包含"location"字段，用简短的文字描述错题在图片中的大概位置，例如"第2行左侧"、"中间偏上第4题"、"最后一行"，方便家长对照原图找到错题。`;
 
   try {
     const apiKey = localStorage.getItem('qwen_key') || '';
@@ -618,7 +668,6 @@ function showResult(r) {
   document.getElementById('result-title').textContent = `${r.subject} · 批改完成`;
   document.getElementById('result-meta').textContent = r.summary;
 
-  // Score color
   const banner = document.getElementById('score-banner');
   if (r.score >= 90) banner.style.background = 'linear-gradient(135deg,#14532d,#16a34a)';
   else if (r.score >= 75) banner.style.background = 'linear-gradient(135deg,#1a3a5c,#2563eb)';
@@ -626,15 +675,33 @@ function showResult(r) {
 
   let html = '';
 
-  // Wrong items
+  // ── 原图 + 错题位置说明 ──
+  const imgSrc = document.getElementById('preview-img').src;
+  if (imgSrc && r.wrong_items && r.wrong_items.length > 0) {
+    html += `<div class="card">
+      <div class="card-title">🖼️ 作业原图 · 错题位置参考</div>
+      <div class="photo-wrap">
+        <img src="${imgSrc}" style="width:100%;border-radius:10px;">
+      </div>
+      <div style="margin-top:10px;background:#fef2f2;border-radius:8px;padding:10px 12px;">
+        <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:6px;">📍 AI标记的错题位置</div>
+        ${r.wrong_items.map((w,i) => `<div style="font-size:12px;color:#7f1d1d;padding:3px 0;border-bottom:1px solid #fecaca;">
+          <span style="font-weight:700">${w.number}</span> — ${w.location || '请对照下方错题列表'}
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── 错题详情 + 反馈按钮 ──
   if (r.wrong_items && r.wrong_items.length > 0) {
-    html += `<div class="card"><div class="card-title">❌ 错题详情（${r.wrong_items.length}题）</div>`;
-    r.wrong_items.forEach(w => {
-      html += `<div class="wrong-item ${w.type||'error'}">
+    html += `<div class="card"><div class="card-title">❌ 错题详情（${r.wrong_items.length}题）<span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:6px;">如有误判可点"批错了"</span></div>`;
+    r.wrong_items.forEach((w, i) => {
+      html += `<div class="wrong-item ${w.type||'error'}" id="wi-${i}">
         <div class="q-num">${w.number}</div>
         <div class="q-content">${w.question}</div>
         <div class="q-answer">学生答案：${w.student_answer || '未作答'} &nbsp;→&nbsp; 正确：${w.correct_answer}</div>
         <div class="q-reason">💡 ${w.reason}</div>
+        <button class="feedback-btn" onclick="dismissWrong(${i})">👍 批错了，这题是对的</button>
       </div>`;
     });
     html += '</div>';
@@ -642,7 +709,7 @@ function showResult(r) {
     html += `<div class="card" style="text-align:center;padding:20px;"><span style="font-size:32px">🎉</span><p style="font-size:14px;font-weight:700;margin-top:8px;color:var(--green)">全对！太棒了</p></div>`;
   }
 
-  // Knowledge points
+  // ── 知识点 ──
   if (r.knowledge_points && r.knowledge_points.length > 0) {
     html += `<div class="card"><div class="card-title">📊 知识点掌握情况</div>`;
     r.knowledge_points.forEach(k => {
@@ -660,6 +727,17 @@ function showResult(r) {
   }
 
   document.getElementById('ai-output').innerHTML = html;
+}
+
+// ── 反馈：批错了 ──
+function dismissWrong(idx) {
+  if (!currentResult || !currentResult.wrong_items[idx]) return;
+  currentResult.wrong_items[idx]._dismissed = true;
+  const el = document.getElementById('wi-' + idx);
+  if (el) {
+    el.classList.add('dismissed');
+    el.querySelector('.feedback-btn').textContent = '✅ 已移除';
+  }
 }
 
 function showError(msg) {
@@ -682,14 +760,30 @@ function resetGrade() {
 // ── Save to error book ──
 function saveAndGoErrors() {
   if (!currentResult) return;
-  db.sessions.push(currentResult);
-  // Add wrong items to errors
+  // Store photo this month (clear old ones if new month)
+  const now = new Date();
+  const monthKey = now.getFullYear() + '-' + (now.getMonth()+1);
+  if (db.photoMonth && db.photoMonth !== monthKey) {
+    db.photos = []; // new month → clear photos
+  }
+  db.photoMonth = monthKey;
+  if (!db.photos) db.photos = [];
+  const imgSrc = document.getElementById('preview-img').src;
+  if (imgSrc) db.photos.push({ src: imgSrc, date: currentResult.date, subject: currentResult.subject });
+
+  // Save session (without large image data to save space)
+  const sessionToSave = { ...currentResult };
+  db.sessions.push(sessionToSave);
+
+  // Add only non-dismissed wrong items
   if (currentResult.wrong_items) {
     currentResult.wrong_items.forEach(w => {
-      db.errors.push({ ...w, subject: currentResult.subject, date: currentResult.date });
+      if (!w._dismissed) {
+        db.errors.push({ ...w, subject: currentResult.subject, date: currentResult.date });
+      }
     });
   }
-  // Tally topics
+  // Tally topics (only non-dismissed)
   if (currentResult.knowledge_points) {
     currentResult.knowledge_points.forEach(k => {
       if (k.status !== 'good') {
@@ -738,6 +832,7 @@ function renderHistory() {
 
 // ── Error screen ──
 function renderErrors() {
+  updatePhotoBanner();
   document.getElementById('err-total').textContent = db.errors.length;
   document.getElementById('err-topics').textContent = Object.keys(db.topics).length;
   document.getElementById('err-sessions').textContent = db.sessions.length;
@@ -848,7 +943,38 @@ function saveSettings() {
 
 updateBadge();
 renderHistory();
+autoMonthClear();
 if (!localStorage.getItem('qwen_key')) setTimeout(showSettings, 500);
+
+function autoMonthClear() {
+  const now = new Date();
+  const monthKey = now.getFullYear() + '-' + (now.getMonth()+1);
+  if (db.photoMonth && db.photoMonth !== monthKey) {
+    db.photos = [];
+    db.photoMonth = monthKey;
+    saveDB();
+  }
+}
+
+function clearPhotos() {
+  if (!confirm('确定清除本月所有保存的照片吗？错题记录不受影响。')) return;
+  db.photos = [];
+  saveDB();
+  document.getElementById('photo-clear-banner').style.display = 'none';
+  alert('✅ 照片已清除');
+}
+
+function updatePhotoBanner() {
+  const count = (db.photos || []).length;
+  const banner = document.getElementById('photo-clear-banner');
+  if (!banner) return;
+  if (count > 0) {
+    banner.style.display = 'flex';
+    document.getElementById('photo-count').textContent = count;
+  } else {
+    banner.style.display = 'none';
+  }
+}
 </script>
 
 <!-- ── Settings Overlay ── -->
