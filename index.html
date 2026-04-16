@@ -650,12 +650,20 @@ async function gradeWithAI(imageBase64) {
       return;
     }
 
-    const raw = data.choices?.[0]?.message?.content || '';
+    let raw = data.choices?.[0]?.message?.content || '';
     if (!raw) { showError('API返回为空，请重试'); return; }
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) { showError('AI返回格式异常：' + raw.slice(0,100)); return; }
+    // 去掉思考过程 <think>...</think>
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    // 提取JSON块
+    const match = raw.match(/```json([\s\S]*?)```/) || raw.match(/```([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
+    if (!match) { showError('AI未返回有效内容，请重试'); return; }
+    let jsonStr = (match[1] || match[0]).trim();
     let result;
-    try { result = JSON.parse(match[0]); } catch(e) { showError('解析失败，请重试'); return; }
+    try { result = JSON.parse(jsonStr); } catch(e) {
+      // 尝试修复常见JSON问题：去掉注释、末尾逗号
+      jsonStr = jsonStr.replace(/\/\/.*$/gm, '').replace(/,\s*([}\]])/g, '$1');
+      try { result = JSON.parse(jsonStr); } catch(e2) { showError('AI返回格式有误，请重试'); return; }
+    }
     if (result.error) { showError(result.error); return; }
 
     currentResult = { ...result, subject: selectedSubject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
