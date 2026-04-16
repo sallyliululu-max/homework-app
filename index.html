@@ -632,7 +632,7 @@ async function gradeWithAI(imageBase64) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3-vl-plus',
+        model: 'qwen-vl-max',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
@@ -651,9 +651,11 @@ async function gradeWithAI(imageBase64) {
     }
 
     const raw = data.choices?.[0]?.message?.content || '';
+    if (!raw) { showError('API返回为空，请重试'); return; }
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) { showError('AI返回异常，请重试'); return; }
-    const result = JSON.parse(match[0]);
+    if (!match) { showError('AI返回格式异常：' + raw.slice(0,100)); return; }
+    let result;
+    try { result = JSON.parse(match[0]); } catch(e) { showError('解析失败，请重试'); return; }
     if (result.error) { showError(result.error); return; }
 
     currentResult = { ...result, subject: selectedSubject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
