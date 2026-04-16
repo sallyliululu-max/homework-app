@@ -428,8 +428,8 @@ body {
 
   <div class="loading-box" id="loading-box">
     <div class="spinner"></div>
-    <p>AI 正在识别并批改作业…</p>
-    <p style="font-size:12px;margin-top:6px;color:#9ca3af;">通常需要10-20秒</p>
+    <p id="loading-step">📷 第一步：AI 正在识别作业图片…</p>
+    <p style="font-size:12px;margin-top:6px;color:#9ca3af;">两阶段AI批改，通常需要15-30秒</p>
   </div>
 
   <div class="result-area" id="result-area">
@@ -582,18 +582,62 @@ function handlePhoto(event) {
   reader.readAsDataURL(file);
 }
 
-// ── AI Grading ──
+// ── AI Grading (两阶段：Qwen2.5-VL 识别 → Qwen3-32B 批改) ──
 async function gradeWithAI(imageBase64) {
   document.getElementById('loading-box').style.display = 'block';
   document.getElementById('result-area').style.display = 'none';
   document.querySelector('.upload-zone').style.display = 'none';
 
-  const base64Data = imageBase64.split(',')[1];
-  const mediaType = imageBase64.split(';')[0].split(':')[1];
+  const loadingText = document.getElementById('loading-step');
 
-  const prompt = `你是一位专业的小学${selectedSubject}老师，请仔细批改这份作业图片。
+  try {
+    const apiKey = localStorage.getItem('qwen_key') || '';
+    if (!apiKey) { showError('请先在设置中填入 通义千问 API Key'); showSettings(); return; }
 
-请用以下JSON格式返回批改结果（只返回JSON，不要其他文字）：
+    // ── 第一阶段：Qwen2.5-VL 识别图片内容 ──
+    loadingText.textContent = '📷 第一步：AI 正在识别作业图片…';
+
+    const visionResp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'qwen2.5-vl-max-0125',
+        max_tokens: 2000,
+        messages: [
+          { role: 'system', content: '你是专业的作业识别助手，请详细、准确地描述图片中作业的所有题目内容、学生的每一道答案，以及任何可见的批注或标记。保留原始格式，不要遗漏任何题目。' },
+          { role: 'user', content: [
+            { type: 'image_url', image_url: { url: imageBase64 } },
+            { type: 'text', text: `这是一份小学${selectedSubject}作业图片。请详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n如果图片不清晰或无法识别为作业，请说明原因。` }
+          ]}
+        ]
+      })
+    });
+
+    const visionData = await visionResp.json();
+    if (!visionResp.ok) {
+      showError('图片识别失败：' + (visionData?.error?.message || visionResp.status) + '\n请确认Key是否正确、账户是否有余额');
+      return;
+    }
+
+    let ocrText = visionData.choices?.[0]?.message?.content || '';
+    if (!ocrText) { showError('图片识别返回为空，请重试'); return; }
+    // 去掉思考过程
+    ocrText = ocrText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    if (ocrText.includes('不清晰') || ocrText.includes('无法识别') || ocrText.length < 20) {
+      showError('图片无法识别，请重新拍照（保持清晰、光线充足）');
+      return;
+    }
+
+    // ── 第二阶段：Qwen3-32B 批改分析 ──
+    loadingText.textContent = '✏️ 第二步：AI 正在批改分析…';
+
+    const gradePrompt = `你是一位专业的小学${selectedSubject}老师。以下是通过图像识别提取的作业内容：
+
+【识别到的作业内容】
+${ocrText}
+
+请根据上述内容，严格按以下JSON格式返回批改结果（只返回JSON，不要其他文字）：
 {
   "score": 数字（0-100的估算分数）,
   "total_questions": 题目总数,
@@ -606,7 +650,8 @@ async function gradeWithAI(imageBase64) {
       "student_answer": "学生的答案",
       "correct_answer": "正确答案",
       "reason": "错误原因（简短分析）",
-      "type": "error或warning（error=明确错误，warning=写法/习惯问题）"
+      "type": "error或warning（error=明确错误，warning=写法/习惯问题）",
+      "location": "该题在图片中的大致位置（如'第2行左侧'、'中间偏上第4题'）"
     }
   ],
   "knowledge_points": [
@@ -617,41 +662,29 @@ async function gradeWithAI(imageBase64) {
     }
   ],
   "advice": ["给家长的具体建议1", "给家长的具体建议2"]
-}
+}`;
 
-如果图片不清晰或不是作业，请返回：{"error": "图片无法识别，请重新拍照"}
-
-特别注意：wrong_items中每个错题必须包含"location"字段，用简短的文字描述错题在图片中的大概位置，例如"第2行左侧"、"中间偏上第4题"、"最后一行"，方便家长对照原图找到错题。`;
-
-  try {
-    const apiKey = localStorage.getItem('qwen_key') || '';
-    if (!apiKey) { showError('请先在设置中填入 通义千问 API Key'); showSettings(); return; }
-
-    // 通义千问视觉模型
-    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    const gradeResp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen-vl-max',
+        model: 'qwen3-32b',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
-          { role: 'user', content: [
-            { type: 'image_url', image_url: { url: imageBase64 } },
-            { type: 'text', text: prompt }
-          ]}
+          { role: 'user', content: gradePrompt }
         ]
       })
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      showError('API错误：' + (data?.error?.message || response.status) + '\n请确认Key是否正确、账户是否有余额');
+    const gradeData = await gradeResp.json();
+    if (!gradeResp.ok) {
+      showError('批改分析失败：' + (gradeData?.error?.message || gradeResp.status));
       return;
     }
 
-    let raw = data.choices?.[0]?.message?.content || '';
-    if (!raw) { showError('API返回为空，请重试'); return; }
+    let raw = gradeData.choices?.[0]?.message?.content || '';
+    if (!raw) { showError('批改返回为空，请重试'); return; }
     // 去掉思考过程 <think>...</think>
     raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     // 提取JSON块
@@ -660,7 +693,6 @@ async function gradeWithAI(imageBase64) {
     let jsonStr = (match[1] || match[0]).trim();
     let result;
     try { result = JSON.parse(jsonStr); } catch(e) {
-      // 尝试修复常见JSON问题：去掉注释、末尾逗号
       jsonStr = jsonStr.replace(/\/\/.*$/gm, '').replace(/,\s*([}\]])/g, '$1');
       try { result = JSON.parse(jsonStr); } catch(e2) { showError('AI返回格式有误，请重试'); return; }
     }
@@ -929,7 +961,7 @@ async function generateExam() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3-max', max_tokens: 1500,
+        model: 'qwen3-max', max_tokens: 1500, // 出试卷：qwen3-max
         messages: [{ role: 'user', content: `请为小学三年级学生出一份${month}月模拟试卷。薄弱知识点：${errorSummary}。要求：20题满分100分约45分钟，按薄弱点多出题，包含填空选择计算应用，每题注明分值，格式清晰。直接输出试卷，最后附参考答案。` }]
       })
     });
