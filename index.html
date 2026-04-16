@@ -601,7 +601,7 @@ async function gradeWithAI(imageBase64) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen2.5-vl-max-0125',
+        model: 'qwen-vl-plus',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业的作业识别助手，请详细、准确地描述图片中作业的所有题目内容、学生的每一道答案，以及任何可见的批注或标记。保留原始格式，不要遗漏任何题目。' },
@@ -668,7 +668,7 @@ ${ocrText}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3-32b',
+        model: 'qwen3-max',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
