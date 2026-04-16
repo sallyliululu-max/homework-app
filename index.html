@@ -412,13 +412,17 @@ body {
     </button>
   </div>
 
-  <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="handlePhoto(event)">
-  
+  <input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(event)">
+  <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+
   <div class="upload-zone" onclick="document.getElementById('photo-input').click()">
-    <span class="upload-emoji">📷</span>
-    <p class="upload-title">点击拍照 / 选择照片</p>
-    <p class="upload-sub">支持作业本、试卷、练习册</p>
+    <span class="upload-emoji">🖼️</span>
+    <p class="upload-title">点击选择照片</p>
+    <p class="upload-sub">从相册选择作业照片</p>
   </div>
+  <button class="btn-primary" onclick="document.getElementById('camera-input').click()" style="margin-bottom:12px;">
+    📷 直接拍照
+  </button>
 
   <img id="preview-img" class="preview-img">
 
@@ -628,7 +632,7 @@ async function gradeWithAI(imageBase64) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3',
+        model: 'qwen3-max',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
@@ -750,6 +754,7 @@ function showError(msg) {
 
 function resetGrade() {
   document.getElementById('photo-input').value = '';
+  document.getElementById('camera-input').value = '';
   document.getElementById('preview-img').style.display = 'none';
   document.getElementById('result-area').style.display = 'none';
   document.querySelector('.upload-zone').style.display = 'block';
@@ -914,7 +919,7 @@ async function generateExam() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3', max_tokens: 1500,
+        model: 'qwen3-max', max_tokens: 1500,
         messages: [{ role: 'user', content: `请为小学三年级学生出一份${month}月模拟试卷。薄弱知识点：${errorSummary}。要求：20题满分100分约45分钟，按薄弱点多出题，包含填空选择计算应用，每题注明分值，格式清晰。直接输出试卷，最后附参考答案。` }]
       })
     });
