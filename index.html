@@ -632,7 +632,7 @@ async function gradeWithAI(imageBase64) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen3-max',
+        model: 'qwen3-vl-plus',
         max_tokens: 2000,
         messages: [
           { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
