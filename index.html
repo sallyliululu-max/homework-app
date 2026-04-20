@@ -556,7 +556,7 @@ body {
 <script>
 // ── State ──
 let selectedSubject = '数学';
-let db = JSON.parse(localStorage.getItem('hwapp_db') || '{"sessions":[],"errors":[],"topics":{}}');
+let db = JSON.parse(localStorage.getItem('hwapp_db') || '{"sessions":[],"errors":[],"topics":{},"kpByDate":{}}');
 let currentResult = null;
 
 function saveDB() { localStorage.setItem('hwapp_db', JSON.stringify(db)); }
@@ -833,23 +833,21 @@ function saveAndGoErrors() {
   const sessionToSave = { ...currentResult };
   db.sessions.push(sessionToSave);
 
-  // Add only non-dismissed wrong items, attach knowledge_point tag
-  const kpMap = {}; // question index → knowledge point name
-  if (currentResult.knowledge_points) {
-    currentResult.knowledge_points.forEach(k => {
-      if (k.status !== 'good') kpMap[k.name] = { name: k.name, subject: currentResult.subject };
-    });
-  }
+  // Add only non-dismissed wrong items
   if (currentResult.wrong_items) {
-    currentResult.wrong_items.forEach((w, i) => {
+    currentResult.wrong_items.forEach(w => {
       if (!w._dismissed) {
-        // attach a knowledge_point best-guess: first weak kp of same subject, or null
-        const kpName = Object.keys(kpMap)[i] || Object.keys(kpMap)[0] || null;
-        db.errors.push({ ...w, subject: currentResult.subject, date: currentResult.date, kp: kpName });
+        db.errors.push({ ...w, subject: currentResult.subject, date: currentResult.date });
       }
     });
   }
-  // Tally topics (only non-dismissed) — recompute from scratch for accuracy
+  // Store weak knowledge_points per session date (for accurate rebuild after deletion)
+  if (currentResult.knowledge_points) {
+    if (!db.kpByDate) db.kpByDate = {};
+    db.kpByDate[currentResult.date] = currentResult.knowledge_points
+      .filter(k => k.status !== 'good')
+      .map(k => ({ name: k.name, subject: currentResult.subject }));
+  }
   rebuildTopics();
   saveDB();
   updateBadge();
@@ -972,15 +970,17 @@ function renderErrorList() {
     </div>`).join('');
 }
 
-// ── Rebuild topics from errors (source of truth) ──
+// ── Rebuild topics from kpByDate, filtered to dates still in db.errors ──
 function rebuildTopics() {
   db.topics = {};
-  db.errors.forEach(e => {
-    const kp = e.kp;
-    if (kp) {
-      if (!db.topics[kp]) db.topics[kp] = { count: 0, subject: e.subject };
-      db.topics[kp].count++;
-    }
+  const activeDates = new Set(db.errors.map(e => e.date));
+  const kpByDate = db.kpByDate || {};
+  activeDates.forEach(date => {
+    const kps = kpByDate[date] || [];
+    kps.forEach(k => {
+      if (!db.topics[k.name]) db.topics[k.name] = { count: 0, subject: k.subject };
+      db.topics[k.name].count++;
+    });
   });
 }
 
@@ -989,12 +989,10 @@ function deleteError(idx) {
   db.errors.splice(idx, 1);
   // 重新从错题列表计算知识点
   rebuildTopics();
-  // 重新从 sessions 过滤建议（移除已无错题支撑的 session advice 无法精确，保留 sessions 不变，advice 显示基于剩余错题的 topics）
   saveDB();
   renderErrors();
   updateBadge();
-  // 如果试卷页面已打开也同步更新题型分布
-  if (document.getElementById('screen-exam').classList.contains('active')) renderExamTopics();
+  renderExamTopics();
 }
 
 // ── Exam screen ──
