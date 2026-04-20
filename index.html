@@ -328,8 +328,27 @@ body {
   display: flex; align-items: flex-start; gap: 8px;
 }
 
-/* section label */
-.sec-label { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
+/* ── Error list item ── */
+.err-list-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.err-list-item:last-child { border-bottom: none; }
+.err-list-body { flex: 1; min-width: 0; }
+.err-list-num { font-size: 11px; font-weight: 700; color: var(--red); margin-bottom: 2px; }
+.err-list-q { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.err-list-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.err-del-btn {
+  flex-shrink: 0;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--red-light); color: var(--red);
+  border: none; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 2px;
+  transition: background 0.15s;
+}
+.err-del-btn:active { background: #fca5a5; }
+
 
 /* ── Photo + annotation panel ── */
 .photo-panel {
@@ -360,20 +379,7 @@ body {
 .feedback-btn:active { background: #fef3c7; }
 .wrong-item.dismissed { opacity: 0.4; pointer-events: none; }
 
-/* ── Clear photos banner ── */
-.clear-banner {
-  background: #f0fdf4; border: 1px solid #bbf7d0;
-  border-radius: 10px; padding: 10px 14px;
-  font-size: 13px; color: #166534;
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
-}
-.clear-btn-sm {
-  font-size: 12px; font-weight: 700; color: #dc2626;
-  background: #fee2e2; border: none; border-radius: 8px;
-  padding: 4px 10px; cursor: pointer;
-  font-family: 'Noto Sans SC', sans-serif;
-}
+
 </style>
 </head>
 <body>
@@ -456,10 +462,7 @@ body {
 
 <!-- ── SCREEN 2: ERROR BOOK ── -->
 <div class="screen" id="screen-errors">
-  <div class="clear-banner" id="photo-clear-banner" style="display:none;">
-    <span>📷 本月已保存 <span id="photo-count">0</span> 张作业照片</span>
-    <button class="clear-btn-sm" onclick="clearPhotos()">🗑️ 立即清除</button>
-  </div>
+
   <div class="stat-row">
     <div class="stat-card">
       <div class="stat-val" style="color:var(--red)" id="err-total">0</div>
@@ -482,6 +485,14 @@ body {
   <p class="sec-label">高频错误知识点</p>
   <div class="card" id="topics-card">
     <p style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px 0;">暂无记录，先去批改一份作业吧 😊</p>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;margin-top:4px;">
+    <p class="sec-label" style="margin:0;">错题记录</p>
+    <button id="toggle-errors-btn" onclick="toggleErrorList()" style="font-size:12px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:'Noto Sans SC',sans-serif;font-weight:700;">展开查看</button>
+  </div>
+  <div id="error-list-card" style="display:none;">
+    <div class="card" style="padding:4px 16px;" id="error-items-list"></div>
   </div>
 
   <p class="sec-label">给家长的建议</p>
@@ -879,7 +890,6 @@ function renderHistory() {
 
 // ── Error screen ──
 function renderErrors() {
-  updatePhotoBanner();
   document.getElementById('err-total').textContent = db.errors.length;
   document.getElementById('err-topics').textContent = Object.keys(db.topics).length;
   document.getElementById('err-sessions').textContent = db.sessions.length;
@@ -910,7 +920,6 @@ function renderErrors() {
   if (db.sessions.length < 1) {
     adviceCard.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px 0;">批改更多作业后会自动生成建议</p>';
   } else {
-    // Collect all advice from sessions
     const allAdvice = [];
     const seen = new Set();
     db.sessions.forEach(s => { if (s.advice) s.advice.forEach(a => { if (!seen.has(a)) { seen.add(a); allAdvice.push(a); } }); });
@@ -922,6 +931,53 @@ function renderErrors() {
         <div class="tip-text"><span>${a}</span></div>
       </div>`).join('') || '<p style="color:var(--text-muted);font-size:13px;padding:8px 0">目前情况良好，继续保持！</p>';
   }
+
+  // Error list
+  renderErrorList();
+}
+
+// ── Error list (collapsible) ──
+let errorListOpen = false;
+function toggleErrorList() {
+  errorListOpen = !errorListOpen;
+  document.getElementById('error-list-card').style.display = errorListOpen ? 'block' : 'none';
+  document.getElementById('toggle-errors-btn').textContent = errorListOpen ? '收起' : '展开查看';
+  if (errorListOpen) renderErrorList();
+}
+
+function renderErrorList() {
+  if (!errorListOpen) return;
+  const list = document.getElementById('error-items-list');
+  if (db.errors.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px 0;">暂无错题记录</p>';
+    return;
+  }
+  list.innerHTML = db.errors.map((e, i) => `
+    <div class="err-list-item" id="errli-${i}">
+      <div class="err-list-body">
+        <div class="err-list-num">${e.subject} · ${e.date}</div>
+        <div class="err-list-q">${e.number ? e.number + '：' : ''}${e.question || '（无题目描述）'}</div>
+        <div class="err-list-meta">学生答：${e.student_answer || '-'} → 正确：${e.correct_answer || '-'}</div>
+      </div>
+      <button class="err-del-btn" onclick="deleteError(${i})" title="删除此条错题">🗑</button>
+    </div>`).join('');
+}
+
+function deleteError(idx) {
+  if (!confirm('确定删除这条错题记录吗？')) return;
+  const removed = db.errors.splice(idx, 1)[0];
+  // 同步更新 topics 计数（根据 knowledge_points name 匹配有局限，这里用 question 内容推断不准，
+  // 所以只做数量递减：找到 subject 相同、count > 0 的第一个 topic 减 1）
+  if (removed && removed.subject) {
+    const match = Object.entries(db.topics).find(([, v]) => v.subject === removed.subject && v.count > 0);
+    if (match) {
+      db.topics[match[0]].count--;
+      if (db.topics[match[0]].count <= 0) delete db.topics[match[0]];
+    }
+  }
+  saveDB();
+  renderErrors();
+  updateBadge();
 }
 
 // ── Exam screen ──
@@ -1019,25 +1075,7 @@ function autoMonthClear() {
   }
 }
 
-function clearPhotos() {
-  if (!confirm('确定清除本月所有保存的照片吗？错题记录不受影响。')) return;
-  db.photos = [];
-  saveDB();
-  document.getElementById('photo-clear-banner').style.display = 'none';
-  alert('✅ 照片已清除');
-}
 
-function updatePhotoBanner() {
-  const count = (db.photos || []).length;
-  const banner = document.getElementById('photo-clear-banner');
-  if (!banner) return;
-  if (count > 0) {
-    banner.style.display = 'flex';
-    document.getElementById('photo-count').textContent = count;
-  } else {
-    banner.style.display = 'none';
-  }
-}
 </script>
 
 <!-- ── Settings Overlay ── -->
