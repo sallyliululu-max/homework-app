@@ -381,7 +381,7 @@ body {
 <div class="header">
   <div class="header-left">
     <h1>📚 作业批改助手</h1>
-    <p id="header-sub">三年级 · 小明</p>
+    <p id="header-sub">加载中…</p>
   </div>
   <div style="display:flex;gap:8px;align-items:center;"><div class="header-avatar" onclick="showSettings()" style="cursor:pointer;font-size:16px;" title="设置">⚙️</div><div class="header-avatar">👨‍👩‍👦</div></div>
 </div>
@@ -607,7 +607,7 @@ async function gradeWithAI(imageBase64) {
           { role: 'system', content: '你是专业的作业识别助手，请详细、准确地描述图片中作业的所有题目内容、学生的每一道答案，以及任何可见的批注或标记。保留原始格式，不要遗漏任何题目。' },
           { role: 'user', content: [
             { type: 'image_url', image_url: { url: imageBase64 } },
-            { type: 'text', text: `这是一份小学${selectedSubject}作业图片。请详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n如果图片不清晰或无法识别为作业，请说明原因。` }
+            { type: 'text', text: `这是一份小学${selectedSubject}作业图片（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。请详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n如果图片不清晰或无法识别为作业，请说明原因。` }
           ]}
         ]
       })
@@ -632,7 +632,7 @@ async function gradeWithAI(imageBase64) {
     // ── 第二阶段：Qwen3-32B 批改分析 ──
     loadingText.textContent = '✏️ 第二步：AI 正在批改分析…';
 
-    const gradePrompt = `你是一位专业的小学${selectedSubject}老师。以下是通过图像识别提取的作业内容：
+    const gradePrompt = `你是一位专业的小学${selectedSubject}老师（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。以下是通过图像识别提取的作业内容：
 
 【识别到的作业内容】
 ${ocrText}
@@ -962,7 +962,7 @@ async function generateExam() {
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
         model: 'qwen3-max', max_tokens: 1500, // 出试卷：qwen3-max
-        messages: [{ role: 'user', content: `请为小学三年级学生出一份${month}月模拟试卷。薄弱知识点：${errorSummary}。要求：20题满分100分约45分钟，按薄弱点多出题，包含填空选择计算应用，每题注明分值，格式清晰。直接输出试卷，最后附参考答案。` }]
+        messages: [{ role: 'user', content: `请为小学${localStorage.getItem('child_grade')||'三年级'}学生出一份${month}月模拟试卷。薄弱知识点：${errorSummary}。要求：20题满分100分约45分钟，按薄弱点多出题，包含填空选择计算应用，每题注明分值，格式清晰。直接输出试卷，最后附参考答案。` }]
       })
     });
     const data = await response.json();
@@ -978,19 +978,35 @@ function copyExam() {
   navigator.clipboard.writeText(text).then(() => alert('✅ 已复制！可粘贴到微信或备忘录'));
 }
 
-function showSettings() { document.getElementById('settings-overlay').style.display = 'flex'; document.getElementById('key-input').value = localStorage.getItem('qwen_key') || ''; }
+function showSettings() {
+  document.getElementById('settings-overlay').style.display = 'flex';
+  document.getElementById('key-input').value = localStorage.getItem('qwen_key') || '';
+  document.getElementById('child-name-input').value = localStorage.getItem('child_name') || '';
+  document.getElementById('child-grade-input').value = localStorage.getItem('child_grade') || '三年级';
+}
 function hideSettings() { document.getElementById('settings-overlay').style.display = 'none'; }
 function saveSettings() {
   const k = document.getElementById('key-input').value.trim();
   if (!k) { alert('请输入 API Key'); return; }
   localStorage.setItem('qwen_key', k);
+  const name = document.getElementById('child-name-input').value.trim() || '小朋友';
+  const grade = document.getElementById('child-grade-input').value;
+  localStorage.setItem('child_name', name);
+  localStorage.setItem('child_grade', grade);
+  updateHeader();
   hideSettings();
   alert('✅ 保存成功！现在可以开始批改作业了');
+}
+function updateHeader() {
+  const name = localStorage.getItem('child_name') || '小朋友';
+  const grade = localStorage.getItem('child_grade') || '三年级';
+  document.getElementById('header-sub').textContent = grade + ' · ' + name;
 }
 
 updateBadge();
 renderHistory();
 autoMonthClear();
+updateHeader();
 if (!localStorage.getItem('qwen_key')) setTimeout(showSettings, 500);
 
 function autoMonthClear() {
@@ -1028,10 +1044,38 @@ function updatePhotoBanner() {
 <div id="settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;align-items:flex-end;justify-content:center;">
   <div style="background:#fff;border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:430px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h2 style="font-size:18px;font-weight:700;">⚙️ 填入 API Key</h2>
+      <h2 style="font-size:18px;font-weight:700;">⚙️ 设置</h2>
       <button onclick="hideSettings()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#6b7280;">✕</button>
     </div>
-    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:13px;color:#92400e;margin-bottom:18px;line-height:1.6;">
+
+    <!-- 孩子信息 -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;">👦 孩子信息</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0;">
+        <div>
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:5px;">孩子姓名</label>
+          <input id="child-name-input" type="text" placeholder="如：小明"
+            style="width:100%;padding:11px 12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;font-family:'Noto Sans SC',sans-serif;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:5px;">年级</label>
+          <select id="child-grade-input"
+            style="width:100%;padding:11px 12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:14px;font-family:'Noto Sans SC',sans-serif;outline:none;background:#fff;appearance:none;">
+            <option value="一年级">一年级</option>
+            <option value="二年级">二年级</option>
+            <option value="三年级" selected>三年级</option>
+            <option value="四年级">四年级</option>
+            <option value="五年级">五年级</option>
+            <option value="六年级">六年级</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:1px;background:#e5e7eb;margin-bottom:18px;"></div>
+
+    <!-- API Key -->
+    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:13px;color:#92400e;margin-bottom:14px;line-height:1.6;">
       📋 <strong>获取免费 Key：</strong><br>
       1. 打开 <strong>dashscope.console.aliyun.com</strong><br>
       2. 注册 → 右上角头像 → API-KEY管理 → 创建<br>
