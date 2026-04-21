@@ -125,23 +125,6 @@ body {
 .upload-zone .upload-sub { font-size: 12px; color: #60a5fa; margin-top: 4px; }
 #photo-input { display: none; }
 
-/* Subject selector */
-.subj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-.subj-btn {
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  background: var(--white);
-  padding: 10px 8px;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s;
-  font-family: 'Noto Sans SC', sans-serif;
-}
-.subj-btn .subj-icon { font-size: 24px; display: block; margin-bottom: 4px; }
-.subj-btn .subj-name { font-size: 13px; font-weight: 500; color: var(--text); }
-.subj-btn.selected { border-color: var(--navy); background: #eff6ff; }
-.subj-btn.selected .subj-name { color: var(--navy); font-weight: 700; }
-
 /* Big action button */
 .btn-primary {
   width: 100%; padding: 15px;
@@ -216,7 +199,7 @@ body {
 }
 .wrong-item.error { background: var(--red-light); border-left: 3px solid var(--red); }
 .wrong-item.warning { background: var(--amber-light); border-left: 3px solid var(--amber); }
-.wrong-item .q-num { font-size: 11px; font-weight: 700; color: var(--red); margin-bottom-3px; }
+.wrong-item .q-num { font-size: 11px; font-weight: 700; color: var(--red); margin-bottom: 3px; }
 .wrong-item.warning .q-num { color: var(--amber); }
 .wrong-item .q-content { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
 .wrong-item .q-answer { font-size: 12px; color: var(--text-muted); }
@@ -328,6 +311,9 @@ body {
   display: flex; align-items: flex-start; gap: 8px;
 }
 
+/* section label */
+.sec-label { font-size: 12px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; margin-top: 4px; }
+
 /* ── Error list item ── */
 .err-list-item {
   display: flex; align-items: flex-start; gap: 10px;
@@ -398,37 +384,21 @@ body {
     💡 拍下作业照片，AI会自动找出错题并分析原因
   </div>
 
-  <p class="sec-label">选择科目</p>
-  <div class="subj-grid">
-    <button class="subj-btn selected" onclick="selectSubj(this,'数学')">
-      <span class="subj-icon">🔢</span>
-      <span class="subj-name">数学</span>
-    </button>
-    <button class="subj-btn" onclick="selectSubj(this,'语文')">
-      <span class="subj-icon">📖</span>
-      <span class="subj-name">语文</span>
-    </button>
-    <button class="subj-btn" onclick="selectSubj(this,'英语')">
-      <span class="subj-icon">🔤</span>
-      <span class="subj-name">英语</span>
-    </button>
-    <button class="subj-btn" onclick="selectSubj(this,'科学')">
-      <span class="subj-icon">🔬</span>
-      <span class="subj-name">科学</span>
-    </button>
-  </div>
+  <input type="file" id="photo-input" accept="image/*" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" onchange="handlePhoto(event)">
+  <input type="file" id="camera-input" accept="image/*" capture="environment" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" onchange="handlePhoto(event)">
 
-  <input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(event)">
-  <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handlePhoto(event)">
-
-  <div class="upload-zone" onclick="document.getElementById('photo-input').click()">
-    <span class="upload-emoji">🖼️</span>
-    <p class="upload-title">点击选择照片</p>
-    <p class="upload-sub">从相册选择作业照片</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+    <div class="upload-zone" style="margin-bottom:0;padding:24px 12px;" onclick="document.getElementById('photo-input').click()">
+      <span class="upload-emoji" style="font-size:36px;">🖼️</span>
+      <p class="upload-title" style="font-size:14px;">选择照片</p>
+      <p class="upload-sub">从相册选择</p>
+    </div>
+    <div class="upload-zone" style="margin-bottom:0;padding:24px 12px;" onclick="document.getElementById('camera-input').click()">
+      <span class="upload-emoji" style="font-size:36px;">📷</span>
+      <p class="upload-title" style="font-size:14px;">直接拍照</p>
+      <p class="upload-sub">调用摄像头</p>
+    </div>
   </div>
-  <button class="btn-primary" onclick="document.getElementById('camera-input').click()" style="margin-bottom:12px;">
-    📷 直接拍照
-  </button>
 
   <img id="preview-img" class="preview-img">
 
@@ -480,6 +450,20 @@ body {
       <div class="stat-val" style="color:var(--blue)" id="err-sessions">0</div>
       <div class="stat-lbl">已批改次数</div>
     </div>
+  </div>
+
+  <!-- 导出 / 导入 / 清空 -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <button onclick="exportData()" style="flex:1;padding:11px 8px;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans SC',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;">
+      📤 导出备份
+    </button>
+    <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px 8px;background:#f0fdf4;color:#15803d;border:1.5px solid #bbf7d0;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans SC',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;">
+      📥 导入恢复
+    </button>
+    <button onclick="clearAllData()" style="flex:1;padding:11px 8px;background:#fff1f2;color:#be123c;border:1.5px solid #fecdd3;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans SC',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;">
+      🗑️ 清空数据
+    </button>
+    <input type="file" id="import-input" accept=".json" style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;" onchange="importData(event)">
   </div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;margin-top:4px;">
@@ -555,7 +539,6 @@ body {
 
 <script>
 // ── State ──
-let selectedSubject = '数学';
 let db = JSON.parse(localStorage.getItem('hwapp_db') || '{"sessions":[],"errors":[],"topics":{},"kpByDate":{}}');
 let currentResult = null;
 
@@ -567,15 +550,8 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('screen-'+tab).classList.add('active');
   document.getElementById('nav-'+tab).classList.add('active');
-  if (tab === 'errors') renderErrors();
+  if (tab === 'errors') { errorListOpen = false; document.getElementById('error-list-card').style.display = 'none'; document.getElementById('toggle-errors-btn').textContent = '展开查看'; renderErrors(); }
   if (tab === 'exam') renderExamTopics();
-}
-
-// ── Subject select ──
-function selectSubj(el, name) {
-  document.querySelectorAll('.subj-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedSubject = name;
 }
 
 // ── Photo handling ──
@@ -593,7 +569,7 @@ function handlePhoto(event) {
   reader.readAsDataURL(file);
 }
 
-// ── AI Grading (两阶段：Qwen2.5-VL 识别 → Qwen3-32B 批改) ──
+// ── AI Grading (两阶段：Qwen-VL 识别+判断科目 → Qwen3-max 批改) ──
 async function gradeWithAI(imageBase64) {
   document.getElementById('loading-box').style.display = 'block';
   document.getElementById('result-area').style.display = 'none';
@@ -605,7 +581,7 @@ async function gradeWithAI(imageBase64) {
     const apiKey = localStorage.getItem('qwen_key') || '';
     if (!apiKey) { showError('请先在设置中填入 通义千问 API Key'); showSettings(); return; }
 
-    // ── 第一阶段：Qwen2.5-VL 识别图片内容 ──
+    // ── 第一阶段：Qwen-VL 识别图片内容并自动判断科目 ──
     loadingText.textContent = '📷 第一步：AI 正在识别作业图片…';
 
     const visionResp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
@@ -618,7 +594,7 @@ async function gradeWithAI(imageBase64) {
           { role: 'system', content: '你是专业的作业识别助手，请详细、准确地描述图片中作业的所有题目内容、学生的每一道答案，以及任何可见的批注或标记。保留原始格式，不要遗漏任何题目。' },
           { role: 'user', content: [
             { type: 'image_url', image_url: { url: imageBase64 } },
-            { type: 'text', text: `这是一份小学${selectedSubject}作业图片（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。请详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n如果图片不清晰或无法识别为作业，请说明原因。` }
+            { type: 'text', text: `这是一份小学作业图片（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。请完成以下任务：\n\n第一行必须输出科目，格式严格为：【科目：数学】或【科目：语文】或【科目：英语】或【科目：科学】（根据作业内容判断，只能是这四个之一）\n\n然后详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n\n如果图片不清晰或无法识别为作业，请说明原因。` }
           ]}
         ]
       })
@@ -632,7 +608,6 @@ async function gradeWithAI(imageBase64) {
 
     let ocrText = visionData.choices?.[0]?.message?.content || '';
     if (!ocrText) { showError('图片识别返回为空，请重试'); return; }
-    // 去掉思考过程
     ocrText = ocrText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
     if (ocrText.includes('不清晰') || ocrText.includes('无法识别') || ocrText.length < 20) {
@@ -640,10 +615,14 @@ async function gradeWithAI(imageBase64) {
       return;
     }
 
-    // ── 第二阶段：Qwen3-32B 批改分析 ──
-    loadingText.textContent = '✏️ 第二步：AI 正在批改分析…';
+    // 从第一行提取科目
+    const subjectMatch = ocrText.match(/【科目：(数学|语文|英语|科学)】/);
+    const detectedSubject = subjectMatch ? subjectMatch[1] : '未知';
 
-    const gradePrompt = `你是一位专业的小学${selectedSubject}老师（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。以下是通过图像识别提取的作业内容：
+    // ── 第二阶段：Qwen3-max 批改分析 ──
+    loadingText.textContent = `✏️ 第二步：正在批改${detectedSubject}作业…`;
+
+    const gradePrompt = `你是一位专业的小学${detectedSubject}老师（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。以下是通过图像识别提取的作业内容：
 
 【识别到的作业内容】
 ${ocrText}
@@ -696,9 +675,7 @@ ${ocrText}
 
     let raw = gradeData.choices?.[0]?.message?.content || '';
     if (!raw) { showError('批改返回为空，请重试'); return; }
-    // 去掉思考过程 <think>...</think>
     raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    // 提取JSON块
     const match = raw.match(/```json([\s\S]*?)```/) || raw.match(/```([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
     if (!match) { showError('AI未返回有效内容，请重试'); return; }
     let jsonStr = (match[1] || match[0]).trim();
@@ -709,7 +686,7 @@ ${ocrText}
     }
     if (result.error) { showError(result.error); return; }
 
-    currentResult = { ...result, subject: selectedSubject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
+    currentResult = { ...result, subject: detectedSubject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
     showResult(currentResult);
   } catch(e) {
     showError('错误：' + e.message);
@@ -855,6 +832,105 @@ function saveAndGoErrors() {
   switchTab('errors');
   currentResult = null;
 }
+
+// ── 导出备份 ──
+function exportData() {
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toLocaleString('zh-CN'),
+    childName: localStorage.getItem('child_name') || '',
+    childGrade: localStorage.getItem('child_grade') || '三年级',
+    db: db
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const name = localStorage.getItem('child_name') || '错题本';
+  a.href = url;
+  a.download = `${name}_错题备份_${dateStr}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── 导入恢复 ──
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const payload = JSON.parse(e.target.result);
+      // 兼容直接导出 db 或包含 version 的格式
+      const imported = payload.db || payload;
+      if (!imported.sessions || !imported.errors) {
+        alert('⚠️ 文件格式不正确，请选择之前导出的备份文件');
+        return;
+      }
+      const errorCount = imported.errors.length;
+      const sessionCount = imported.sessions.length;
+      if (!confirm(`备份文件包含 ${sessionCount} 次批改记录、${errorCount} 条错题。\n\n导入后将与现有数据合并（不会删除现有记录），确认继续？`)) return;
+
+      // 合并 sessions（按 date 去重）
+      const existingDates = new Set(db.sessions.map(s => s.date));
+      imported.sessions.forEach(s => { if (!existingDates.has(s.date)) db.sessions.push(s); });
+
+      // 合并 errors（简单追加，按 date+number 去重）
+      const existingKeys = new Set(db.errors.map(e => e.date + '|' + e.number + '|' + e.question));
+      imported.errors.forEach(e => {
+        const key = e.date + '|' + e.number + '|' + e.question;
+        if (!existingKeys.has(key)) db.errors.push(e);
+      });
+
+      // 合并 kpByDate
+      if (!db.kpByDate) db.kpByDate = {};
+      if (imported.kpByDate) {
+        Object.entries(imported.kpByDate).forEach(([date, kps]) => {
+          if (!db.kpByDate[date]) db.kpByDate[date] = kps;
+        });
+      }
+
+      // 导入孩子信息（仅当本地未设置时）
+      if (payload.childName && !localStorage.getItem('child_name')) {
+        localStorage.setItem('child_name', payload.childName);
+        localStorage.setItem('child_grade', payload.childGrade || '三年级');
+        updateHeader();
+      }
+
+      rebuildTopics();
+      saveDB();
+      updateBadge();
+      renderHistory();
+      renderErrors();
+      alert(`✅ 导入成功！已合并 ${sessionCount} 次批改记录、${errorCount} 条错题`);
+    } catch(err) {
+      alert('⚠️ 文件解析失败，请确认是有效的 JSON 备份文件');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+
+// ── 清空所有数据 ──
+function clearAllData() {
+  if (!confirm('确定清空所有数据吗？\n\n包括：全部错题、批改记录、知识点统计。\n\n建议先导出备份，此操作不可恢复！')) return;
+  db.sessions = [];
+  db.errors = [];
+  db.topics = {};
+  db.kpByDate = {};
+  db.photos = [];
+  saveDB();
+  errorListOpen = false;
+  document.getElementById('error-list-card').style.display = 'none';
+  document.getElementById('toggle-errors-btn').textContent = '展开查看';
+  updateBadge();
+  renderHistory();
+  renderErrors();
+  renderExamTopics();
+  alert('✅ 数据已清空');
+}
+
 
 // ── Badge ──
 function updateBadge() {
@@ -1074,6 +1150,23 @@ function updateHeader() {
   document.getElementById('header-sub').textContent = grade + ' · ' + name;
 }
 
+// ── 数据迁移：补全旧数据的 kpByDate ──
+function migrateDB() {
+  if (!db.kpByDate) db.kpByDate = {};
+  // 从已有 sessions 里补全 kpByDate
+  db.sessions.forEach(s => {
+    if (s.date && !db.kpByDate[s.date] && s.knowledge_points) {
+      db.kpByDate[s.date] = s.knowledge_points
+        .filter(k => k.status !== 'good')
+        .map(k => ({ name: k.name, subject: s.subject }));
+    }
+  });
+  // 有 kpByDate 数据则重建保证准确；否则保留旧 topics 不动
+  if (Object.keys(db.kpByDate).length > 0) rebuildTopics();
+  saveDB();
+}
+
+migrateDB();
 updateBadge();
 renderHistory();
 autoMonthClear();
