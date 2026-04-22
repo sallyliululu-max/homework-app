@@ -336,21 +336,6 @@ body {
 .err-del-btn:active { background: #fca5a5; }
 
 
-/* ── Photo + annotation panel ── */
-.photo-panel {
-  display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;
-}
-.photo-wrap { position: relative; width: 100%; }
-.photo-wrap img { width: 100%; border-radius: 12px; display: block; }
-.location-tag {
-  position: absolute;
-  background: rgba(220,38,38,0.92); color: #fff;
-  font-size: 11px; font-weight: 700;
-  padding: 2px 7px; border-radius: 20px;
-  pointer-events: none; white-space: nowrap;
-  transform: translate(-50%, -50%);
-}
-
 /* ── Feedback button ── */
 .wrong-item { position: relative; }
 .feedback-btn {
@@ -404,8 +389,8 @@ body {
 
   <div class="loading-box" id="loading-box">
     <div class="spinner"></div>
-    <p id="loading-step">📷 第一步：AI 正在识别作业图片…</p>
-    <p style="font-size:12px;margin-top:6px;color:#9ca3af;">两阶段AI批改，通常需要15-30秒</p>
+    <p id="loading-step">🔍 AI 正在识别并批改作业，请稍候…</p>
+    <p style="font-size:12px;margin-top:6px;color:#9ca3af;">通常需要10-20秒</p>
   </div>
 
   <div class="result-area" id="result-area">
@@ -542,7 +527,14 @@ body {
 let db = JSON.parse(localStorage.getItem('hwapp_db') || '{"sessions":[],"errors":[],"topics":{},"kpByDate":{}}');
 let currentResult = null;
 
-function saveDB() { localStorage.setItem('hwapp_db', JSON.stringify(db)); }
+function saveDB() {
+  try {
+    localStorage.setItem('hwapp_db', JSON.stringify(db));
+  } catch(e) {
+    // localStorage 容量不足时提示用户
+    alert('⚠️ 本地存储空间不足，数据可能未保存。\n建议先导出备份，再清空数据。');
+  }
+}
 
 // ── Tab switching ──
 function switchTab(tab) {
@@ -569,113 +561,90 @@ function handlePhoto(event) {
   reader.readAsDataURL(file);
 }
 
-// ── AI Grading (两阶段：Qwen-VL 识别+判断科目 → Qwen3-max 批改) ──
+// ── AI Grading (单阶段：qwen-vl-max 直接识别+批改) ──
 async function gradeWithAI(imageBase64) {
   document.getElementById('loading-box').style.display = 'block';
   document.getElementById('result-area').style.display = 'none';
   document.querySelector('.upload-zone').style.display = 'none';
 
   const loadingText = document.getElementById('loading-step');
+  loadingText.textContent = '🔍 AI 正在识别并批改作业，请稍候…';
 
   try {
     const apiKey = localStorage.getItem('qwen_key') || '';
     if (!apiKey) { showError('请先在设置中填入 通义千问 API Key'); showSettings(); return; }
 
-    // ── 第一阶段：Qwen-VL 识别图片内容并自动判断科目 ──
-    loadingText.textContent = '📷 第一步：AI 正在识别作业图片…';
+    const grade = localStorage.getItem('child_grade') || '三年级';
 
-    const visionResp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    const prompt = `你是一位经验丰富的小学老师，正在批改一份${grade}学生的作业。
+
+请仔细观察图片中每一道题目和学生的每一个答案，逐题核对是否正确。
+
+**批改要求：**
+- 首先判断这是哪个科目（数学/语文/英语/科学）
+- 逐题检查，不能遗漏任何一道题
+- 对于数学题，要亲自计算验证，不能凭感觉判断
+- 对于语文/英语，注意错别字、语法、标点
+- 区分明确错误（error）和书写习惯问题（warning）
+- 每道错题必须给出正确答案和错误原因
+
+请严格只返回如下JSON格式，不要输出任何其他文字：
+{
+  "subject": "科目（数学/语文/英语/科学）",
+  "score": 估算分数（0-100整数，全对100分，每错一题按题目数均扣）,
+  "total_questions": 题目总数,
+  "wrong_count": 错误题数,
+  "summary": "一句话总结，如：共15题，答错2题，得分87分",
+  "wrong_items": [
+    {
+      "number": "题号，如：第3题",
+      "question": "题目原文（尽量完整）",
+      "student_answer": "学生写的答案",
+      "correct_answer": "正确答案",
+      "reason": "错误原因分析（具体说明为什么错）",
+      "type": "error或warning",
+      "location": "题目在图片中的位置，如：第2行左侧"
+    }
+  ],
+  "knowledge_points": [
+    {
+      "name": "涉及的知识点名称",
+      "mastery": 掌握度0-100,
+      "status": "good或fair或weak"
+    }
+  ],
+  "advice": ["针对薄弱点给家长的具体建议（2-3条）"]
+}
+
+如果图片模糊无法识别，返回：{"error": "图片不清晰，请重新拍照"}`;
+
+    const resp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'qwen-vl-plus',
-        max_tokens: 2000,
+        model: 'qwen-vl-max',
+        max_tokens: 3000,
         messages: [
-          { role: 'system', content: '你是专业的作业识别助手，请详细、准确地描述图片中作业的所有题目内容、学生的每一道答案，以及任何可见的批注或标记。保留原始格式，不要遗漏任何题目。' },
+          { role: 'system', content: `你是专业小学老师，直接输出JSON批改结果，绝对不输出任何其他文字，不加markdown代码块。` },
           { role: 'user', content: [
             { type: 'image_url', image_url: { url: imageBase64 } },
-            { type: 'text', text: `这是一份小学作业图片（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。请完成以下任务：\n\n第一行必须输出科目，格式严格为：【科目：数学】或【科目：语文】或【科目：英语】或【科目：科学】（根据作业内容判断，只能是这四个之一）\n\n然后详细识别并描述：\n1. 所有题目的内容和编号\n2. 学生写的每一道题的答案\n3. 各题目在图片中的大致位置（如"第1行"、"中间偏上"等）\n4. 图片中是否有教师批改痕迹（如对勾、叉号）\n\n如果图片不清晰或无法识别为作业，请说明原因。` }
+            { type: 'text', text: prompt }
           ]}
         ]
       })
     });
 
-    const visionData = await visionResp.json();
-    if (!visionResp.ok) {
-      showError('图片识别失败：' + (visionData?.error?.message || visionResp.status) + '\n请确认Key是否正确、账户是否有余额');
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError('批改失败：' + (data?.error?.message || resp.status) + '\n请确认Key是否正确、账户是否有余额');
       return;
     }
 
-    let ocrText = visionData.choices?.[0]?.message?.content || '';
-    if (!ocrText) { showError('图片识别返回为空，请重试'); return; }
-    ocrText = ocrText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-    if (ocrText.includes('不清晰') || ocrText.includes('无法识别') || ocrText.length < 20) {
-      showError('图片无法识别，请重新拍照（保持清晰、光线充足）');
-      return;
-    }
-
-    // 从第一行提取科目
-    const subjectMatch = ocrText.match(/【科目：(数学|语文|英语|科学)】/);
-    const detectedSubject = subjectMatch ? subjectMatch[1] : '未知';
-
-    // ── 第二阶段：Qwen3-max 批改分析 ──
-    loadingText.textContent = `✏️ 第二步：正在批改${detectedSubject}作业…`;
-
-    const gradePrompt = `你是一位专业的小学${detectedSubject}老师（学生年级：${localStorage.getItem('child_grade')||'三年级'}）。以下是通过图像识别提取的作业内容：
-
-【识别到的作业内容】
-${ocrText}
-
-请根据上述内容，严格按以下JSON格式返回批改结果（只返回JSON，不要其他文字）：
-{
-  "score": 数字（0-100的估算分数）,
-  "total_questions": 题目总数,
-  "wrong_count": 错误题数,
-  "summary": "一句话总结（如：共20题，3题有误）",
-  "wrong_items": [
-    {
-      "number": "题号（如第3题）",
-      "question": "题目内容（简短描述）",
-      "student_answer": "学生的答案",
-      "correct_answer": "正确答案",
-      "reason": "错误原因（简短分析）",
-      "type": "error或warning（error=明确错误，warning=写法/习惯问题）",
-      "location": "该题在图片中的大致位置（如'第2行左侧'、'中间偏上第4题'）"
-    }
-  ],
-  "knowledge_points": [
-    {
-      "name": "知识点名称",
-      "mastery": 掌握度百分比（0-100）,
-      "status": "good/fair/weak"
-    }
-  ],
-  "advice": ["给家长的具体建议1", "给家长的具体建议2"]
-}`;
-
-    const gradeResp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model: 'qwen3-max',
-        max_tokens: 2000,
-        messages: [
-          { role: 'system', content: '你是专业小学老师，严格按JSON格式返回批改结果，不加任何额外文字。' },
-          { role: 'user', content: gradePrompt }
-        ]
-      })
-    });
-
-    const gradeData = await gradeResp.json();
-    if (!gradeResp.ok) {
-      showError('批改分析失败：' + (gradeData?.error?.message || gradeResp.status));
-      return;
-    }
-
-    let raw = gradeData.choices?.[0]?.message?.content || '';
-    if (!raw) { showError('批改返回为空，请重试'); return; }
+    let raw = data.choices?.[0]?.message?.content || '';
+    if (!raw) { showError('AI返回为空，请重试'); return; }
     raw = raw.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+    // 提取JSON
     const match = raw.match(/```json([\s\S]*?)```/) || raw.match(/```([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
     if (!match) { showError('AI未返回有效内容，请重试'); return; }
     let jsonStr = (match[1] || match[0]).trim();
@@ -686,7 +655,8 @@ ${ocrText}
     }
     if (result.error) { showError(result.error); return; }
 
-    currentResult = { ...result, subject: detectedSubject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
+    const subject = result.subject || '未知';
+    currentResult = { ...result, subject, date: new Date().toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) };
     showResult(currentResult);
   } catch(e) {
     showError('错误：' + e.message);
@@ -795,20 +765,9 @@ function resetGrade() {
 // ── Save to error book ──
 function saveAndGoErrors() {
   if (!currentResult) return;
-  // Store photo this month (clear old ones if new month)
-  const now = new Date();
-  const monthKey = now.getFullYear() + '-' + (now.getMonth()+1);
-  if (db.photoMonth && db.photoMonth !== monthKey) {
-    db.photos = []; // new month → clear photos
-  }
-  db.photoMonth = monthKey;
-  if (!db.photos) db.photos = [];
-  const imgSrc = document.getElementById('preview-img').src;
-  if (imgSrc) db.photos.push({ src: imgSrc, date: currentResult.date, subject: currentResult.subject });
 
-  // Save session (without large image data to save space)
-  const sessionToSave = { ...currentResult };
-  db.sessions.push(sessionToSave);
+  // Save session
+  db.sessions.push({ ...currentResult });
 
   // Add only non-dismissed wrong items
   if (currentResult.wrong_items) {
@@ -919,7 +878,6 @@ function clearAllData() {
   db.errors = [];
   db.topics = {};
   db.kpByDate = {};
-  db.photos = [];
   saveDB();
   errorListOpen = false;
   document.getElementById('error-list-card').style.display = 'none';
@@ -1174,13 +1132,8 @@ updateHeader();
 if (!localStorage.getItem('qwen_key')) setTimeout(showSettings, 500);
 
 function autoMonthClear() {
-  const now = new Date();
-  const monthKey = now.getFullYear() + '-' + (now.getMonth()+1);
-  if (db.photoMonth && db.photoMonth !== monthKey) {
-    db.photos = [];
-    db.photoMonth = monthKey;
-    saveDB();
-  }
+  // 清理旧的 photos 字段（历史遗留，避免占用空间）
+  if (db.photos) { delete db.photos; delete db.photoMonth; saveDB(); }
 }
 
 
