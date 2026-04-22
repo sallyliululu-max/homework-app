@@ -524,7 +524,19 @@ body {
 
 <script>
 // ── State ──
-let db = JSON.parse(localStorage.getItem('hwapp_db') || '{"sessions":[],"errors":[],"topics":{},"kpByDate":{}}');
+let db;
+try {
+  db = JSON.parse(localStorage.getItem('hwapp_db') || '{}');
+  // 确保必要字段存在
+  if (!db.sessions) db.sessions = [];
+  if (!db.errors) db.errors = [];
+  if (!db.topics) db.topics = {};
+  if (!db.kpByDate) db.kpByDate = {};
+} catch(e) {
+  // localStorage数据损坏时重置，避免整个JS崩溃
+  console.warn('db数据损坏，已重置：', e);
+  db = { sessions: [], errors: [], topics: {}, kpByDate: {} };
+}
 let currentResult = null;
 
 function saveDB() {
