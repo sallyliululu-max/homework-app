@@ -1139,6 +1139,7 @@ function migrateDB() {
 migrateDB();
 updateBadge();
 renderHistory();
+renderExamTopics();
 autoMonthClear();
 updateHeader();
 if (!localStorage.getItem('qwen_key')) setTimeout(showSettings, 500);
