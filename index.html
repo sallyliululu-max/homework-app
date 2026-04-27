@@ -960,21 +960,17 @@ function renderErrors() {
       </div>`).join('');
   }
 
-  // Advice — 只显示仍有对应错题的 session 的建议
+  // Advice — 收集所有 session 的建议（不做日期过滤，避免漏掉不同科目）
   const adviceCard = document.getElementById('advice-card');
   if (db.errors.length === 0) {
     adviceCard.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px 0;text-align:center;">目前情况良好，继续保持！</p>';
   } else if (db.sessions.length < 1) {
     adviceCard.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px 0;">批改更多作业后会自动生成建议</p>';
   } else {
-    // 收集仍有错题的 session 日期集合
-    const activeDates = new Set(db.errors.map(e => e.date));
     const allAdvice = [];
     const seen = new Set();
     db.sessions.forEach(s => {
-      if (activeDates.has(s.date) && s.advice) {
-        s.advice.forEach(a => { if (!seen.has(a)) { seen.add(a); allAdvice.push(a); } });
-      }
+      if (s.advice) s.advice.forEach(a => { if (!seen.has(a)) { seen.add(a); allAdvice.push(a); } });
     });
     const colors = ['#fee2e2', '#fef3c7', '#dbeafe', '#dcfce7'];
     const icons2 = ['⚠️', '📝', '⏰', '💪'];
@@ -1043,24 +1039,32 @@ function deleteError(idx) {
 
 // ── Exam screen ──
 function renderExamTopics() {
-  const topics = Object.entries(db.topics).sort((a,b) => b[1].count - a[1].count).slice(0, 5);
+  const allTopics = Object.entries(db.topics).sort((a,b) => b[1].count - a[1].count);
   const card = document.getElementById('exam-topics-card');
-  if (topics.length === 0) {
+  if (allTopics.length === 0) {
     card.innerHTML = '<p style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px 0;">积累错题后自动生成题型分布</p>';
     return;
   }
-  const total = topics.reduce((a, [,v]) => a + v.count, 0);
-  card.innerHTML = topics.map(([name, info]) => {
-    const pct = Math.round((info.count / total) * 100);
-    const pts = Math.round(pct * 0.8 + 10);
-    return `<div class="exam-topic-row">
-      <div class="etopic-info">
-        <div class="etname">${name}</div>
-        <div class="etmeta">${info.subject} · 出错${info.count}次 → 重点考查</div>
-      </div>
-      <span class="etopic-pts">${pts}分</span>
-    </div>`;
-  }).join('');
+  // 按科目分组
+  const bySubject = {};
+  allTopics.forEach(([name, info]) => {
+    if (!bySubject[info.subject]) bySubject[info.subject] = [];
+    bySubject[info.subject].push([name, info]);
+  });
+  const total = allTopics.reduce((a, [,v]) => a + v.count, 0);
+  card.innerHTML = Object.entries(bySubject).map(([subj, items]) =>
+    items.map(([name, info]) => {
+      const pct = Math.round((info.count / total) * 100);
+      const pts = Math.round(pct * 0.8 + 10);
+      return `<div class="exam-topic-row">
+        <div class="etopic-info">
+          <div class="etname">${name}</div>
+          <div class="etmeta">${info.subject} · 出错${info.count}次 → 重点考查</div>
+        </div>
+        <span class="etopic-pts">${pts}分</span>
+      </div>`;
+    }).join('')
+  ).join('');
 }
 
 async function generateExam() {
